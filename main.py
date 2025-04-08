@@ -21,7 +21,7 @@ def get_openrouter_answer(question, lang="ru"):
         "Content-Type": "application/json",
     }
     data = {
-        "model": "google/gemini-pro",
+        "model": "mistralai/mixtral-8x7b",
         "messages": [{"role": "user", "content": question}]
     }
     try:
@@ -38,6 +38,7 @@ translations = {
     "faq": {"ru": "❓ Часто задаваемые вопросы", "en": "❓ Frequently Asked Questions", "he": "❓ שאלות נפוצות"},
     "ask": {"ru": "✍ Задать свой вопрос", "en": "✍ Ask your question", "he": "✍ שאל שאלה"},
     "specialist": {"ru": "👨‍⚕️ Обратиться к специалисту", "en": "👨‍⚕️ Contact a specialist", "he": "👨‍⚕️ פנייה למומחה"},
+    "emergency": {"ru": "🚨 Экстренная помощь", "en": "🚨 Emergency Help", "he": "🚨 עזרה דחופה"},
     "spec_types": {"ru": "Выберите тип специалиста:", "en": "Choose specialist type:", "he": "בחר סוג מומחה:"},
     "psych": {"ru": "🧠 Психологическая помощь", "en": "🧠 Psychological Help", "he": "🧠 עזרה פסיכולוגית"},
     "finance": {"ru": "💰 Финансовая помощь", "en": "💰 Financial Help", "he": "💰 סיוע כלכלי"},
@@ -172,7 +173,6 @@ base_faqs = [
         }
     }
 ]
-
 @bot.message_handler(commands=['start'])
 def start(message):
     show_language_menu(message.chat.id)
@@ -199,9 +199,20 @@ def show_main_menu(chat_id, lang):
         InlineKeyboardButton(translations["faq"][lang], callback_data="faq"),
         InlineKeyboardButton(translations["ask"][lang], callback_data="ask"),
         InlineKeyboardButton(translations["specialist"][lang], callback_data="specialist"),
+        InlineKeyboardButton(translations["emergency"][lang], callback_data="emergency"),
         InlineKeyboardButton(translations["change_lang"][lang], callback_data="change_lang")
     )
     bot.send_message(chat_id, text, reply_markup=keyboard)
+
+@bot.callback_query_handler(func=lambda call: call.data == "emergency")
+def show_emergency_info(call):
+    lang = user_languages.get(call.from_user.id, "ru")
+    emergency_text = {
+        "ru": "🚨 Экстренная помощь\n\n• Горячая линия: 122\n• Карта убежищ: https://www.govmap.gov.il/?c=181069.69,663017.1&z=7&b=1&lay=BOMBSHELTERS\n• Центр поддержки: https://www.kolzchut.org.il/",
+        "en": "🚨 Emergency Help\n\n• Hotline: 122\n• Shelter map: https://www.govmap.gov.il/?c=181069.69,663017.1&z=7&b=1&lay=BOMBSHELTERS\n• Support center: https://www.kolzchut.org.il/",
+        "he": "🚨 עזרה דחופה\n\n• קו חם: 122\n• מפת מקלטים: https://www.govmap.gov.il/?c=181069.69,663017.1&z=7&b=1&lay=BOMBSHELTERS\n• מרכז תמיכה: https://www.kolzchut.org.il/"
+    }
+    bot.send_message(call.message.chat.id, emergency_text[lang])
 
 @bot.callback_query_handler(func=lambda call: call.data == "change_lang")
 def change_lang(call):
@@ -305,7 +316,7 @@ def show_specialist_info(call):
 
     msg = content[key][lang]
     keyboard = InlineKeyboardMarkup()
-    keyboard.add(InlineKeyboardButton("🔗 Перейти на сайт", url=links[key]))
+    keyboard.add(InlineKeyboardButton("🔗", url=links[key]))
     keyboard.add(InlineKeyboardButton(translations["menu"][lang], callback_data="menu"))
     bot.send_message(call.message.chat.id, msg, reply_markup=keyboard)
 
