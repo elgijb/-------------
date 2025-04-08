@@ -1,5 +1,3 @@
----
-
 ```markdown
 # 🪖 Многоязычный Telegram-бот помощи и поддержки солдат после войны  
 # 🪖 Multilingual Telegram Bot for Post-War Soldier Support  
