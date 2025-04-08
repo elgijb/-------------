@@ -1,13 +1,13 @@
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 import os
-import google.generativeai as genai
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN") or "ВАШ_ТОКЕН_ТУТ"
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or "ВАШ_GEMINI_API_KEY_ТУТ"
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") or "ВАШ_OPENROUTER_API_KEY_ТУТ"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -15,9 +15,22 @@ user_languages = {}
 user_questions = []
 faq_likes = {}
 
-# Настройка Gemini
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-pro")
+def get_openrouter_answer(question, lang="ru"):
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    data = {
+        "model": "google/gemini-pro",
+        "messages": [{"role": "user", "content": question}]
+    }
+    try:
+        r = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data)
+        r.raise_for_status()
+        return r.json()['choices'][0]['message']['content']
+    except Exception as e:
+        print("Error:", e)
+        return translations["error_ai"].get(lang, "Error occurred.")
 
 translations = {
     "choose_language": {"ru": "Выберите язык:", "en": "Choose a language:", "he": "בחר שפה:"},
@@ -167,9 +180,9 @@ def start(message):
 def show_language_menu(chat_id):
     keyboard = InlineKeyboardMarkup()
     keyboard.add(
-        InlineKeyboardButton("\ud83c\uddf7\ud83c\uddfa Русский", callback_data="lang_ru"),
-        InlineKeyboardButton("\ud83c\uddfa\ud83c\uddf8 English", callback_data="lang_en"),
-        InlineKeyboardButton("\ud83c\uddee\ud83c\uddf1 \u05e2\u05d1\u05e8\u05d9\u05ea", callback_data="lang_he")
+        InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru"),
+        InlineKeyboardButton("🇺🇸 English", callback_data="lang_en"),
+        InlineKeyboardButton("🇮🇱 עברית", callback_data="lang_he")
     )
     bot.send_message(chat_id, "Choose language / Выберите язык / בחר שפה:", reply_markup=keyboard)
 
@@ -211,9 +224,9 @@ def send_faq_page(chat_id, page, lang):
     text = f"Q: {q}\nA: {a}"
 
     keyboard = InlineKeyboardMarkup()
-    keyboard.add(InlineKeyboardButton("\ud83d\udc4d", callback_data=f"like_{page}"))
+    keyboard.add(InlineKeyboardButton("👍", callback_data=f"like_{page}"))
     if page + 1 < len(base_faqs):
-        keyboard.add(InlineKeyboardButton("\u27a1\ufe0f", callback_data=f"faq_page:{page+1}"))
+        keyboard.add(InlineKeyboardButton("➡️", callback_data=f"faq_page:{page+1}"))
     keyboard.add(InlineKeyboardButton(translations["menu"][lang], callback_data="menu"))
 
     bot.send_message(chat_id, text, reply_markup=keyboard)
@@ -240,12 +253,7 @@ def ask_question(call):
 def receive_question(msg):
     question = msg.text
     lang = user_languages.get(msg.from_user.id, "ru")
-    try:
-        response = model.generate_content(question)
-        answer = response.text.strip()
-    except Exception:
-        answer = translations["error_ai"][lang]
-
+    answer = get_openrouter_answer(question, lang)
     user_questions.append({"question": {lang: question}, "answer": {lang: answer}})
     bot.send_message(msg.chat.id, answer)
     show_main_menu(msg.chat.id, lang)
