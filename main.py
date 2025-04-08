@@ -24,6 +24,11 @@ translations = {
     "main_menu": {"ru": "Выберите опцию:", "en": "Choose an option:", "he": "בחר אפשרות:"},
     "faq": {"ru": "❓ Часто задаваемые вопросы", "en": "❓ Frequently Asked Questions", "he": "❓ שאלות נפוצות"},
     "ask": {"ru": "✍ Задать свой вопрос", "en": "✍ Ask your question", "he": "✍ שאל שאלה"},
+    "specialist": {"ru": "👨‍⚕️ Обратиться к специалисту", "en": "👨‍⚕️ Contact a specialist", "he": "👨‍⚕️ פנייה למומחה"},
+    "spec_types": {"ru": "Выберите тип специалиста:", "en": "Choose specialist type:", "he": "בחר סוג מומחה:"},
+    "psych": {"ru": "🧠 Психологическая помощь", "en": "🧠 Psychological Help", "he": "🧠 עזרה פסיכולוגית"},
+    "finance": {"ru": "💰 Финансовая помощь", "en": "💰 Financial Help", "he": "💰 סיוע כלכלי"},
+    "legal": {"ru": "⚖️ Юридическая помощь", "en": "⚖️ Legal Help", "he": "⚖️ עזרה משפטית"},
     "menu": {"ru": "🔙 В меню", "en": "🔙 Back to menu", "he": "🔙 חזרה לתפריט"},
     "change_lang": {"ru": "🌐 Сменить язык", "en": "🌐 Change language", "he": "🌐 שנה שפה"},
     "like_thanks": {"ru": "Спасибо за оценку!", "en": "Thanks for your feedback!", "he": "תודה על המשוב!"},
@@ -162,9 +167,9 @@ def start(message):
 def show_language_menu(chat_id):
     keyboard = InlineKeyboardMarkup()
     keyboard.add(
-        InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru"),
-        InlineKeyboardButton("🇺🇸 English", callback_data="lang_en"),
-        InlineKeyboardButton("🇮🇱 עברית", callback_data="lang_he")
+        InlineKeyboardButton("\ud83c\uddf7\ud83c\uddfa Русский", callback_data="lang_ru"),
+        InlineKeyboardButton("\ud83c\uddfa\ud83c\uddf8 English", callback_data="lang_en"),
+        InlineKeyboardButton("\ud83c\uddee\ud83c\uddf1 \u05e2\u05d1\u05e8\u05d9\u05ea", callback_data="lang_he")
     )
     bot.send_message(chat_id, "Choose language / Выберите язык / בחר שפה:", reply_markup=keyboard)
 
@@ -180,6 +185,7 @@ def show_main_menu(chat_id, lang):
     keyboard.add(
         InlineKeyboardButton(translations["faq"][lang], callback_data="faq"),
         InlineKeyboardButton(translations["ask"][lang], callback_data="ask"),
+        InlineKeyboardButton(translations["specialist"][lang], callback_data="specialist"),
         InlineKeyboardButton(translations["change_lang"][lang], callback_data="change_lang")
     )
     bot.send_message(chat_id, text, reply_markup=keyboard)
@@ -205,9 +211,9 @@ def send_faq_page(chat_id, page, lang):
     text = f"Q: {q}\nA: {a}"
 
     keyboard = InlineKeyboardMarkup()
-    keyboard.add(InlineKeyboardButton("👍", callback_data=f"like_{page}"))
+    keyboard.add(InlineKeyboardButton("\ud83d\udc4d", callback_data=f"like_{page}"))
     if page + 1 < len(base_faqs):
-        keyboard.add(InlineKeyboardButton("➡️", callback_data=f"faq_page:{page+1}"))
+        keyboard.add(InlineKeyboardButton("\u27a1\ufe0f", callback_data=f"faq_page:{page+1}"))
     keyboard.add(InlineKeyboardButton(translations["menu"][lang], callback_data="menu"))
 
     bot.send_message(chat_id, text, reply_markup=keyboard)
@@ -248,5 +254,51 @@ def receive_question(msg):
 def back_to_menu(call):
     lang = user_languages.get(call.from_user.id, "ru")
     show_main_menu(call.message.chat.id, lang)
+
+@bot.callback_query_handler(func=lambda call: call.data == "specialist")
+def specialist_menu(call):
+    lang = user_languages.get(call.from_user.id, "ru")
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(
+        InlineKeyboardButton(translations["psych"][lang], callback_data="spec_psych"),
+        InlineKeyboardButton(translations["finance"][lang], callback_data="spec_finance"),
+        InlineKeyboardButton(translations["legal"][lang], callback_data="spec_legal")
+    )
+    keyboard.add(InlineKeyboardButton(translations["menu"][lang], callback_data="menu"))
+    bot.send_message(call.message.chat.id, translations["spec_types"][lang], reply_markup=keyboard)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("spec_"))
+def show_specialist_info(call):
+    lang = user_languages.get(call.from_user.id, "ru")
+    key = call.data
+    content = {
+        "spec_psych": {
+            "ru": "🧠 Психологическая помощь\n\nНужна поддержка? Вот полезные ресурсы:",
+            "en": "🧠 Psychological Help\n\nNeed support? Here are helpful resources:",
+            "he": "🧠 עזרה פסיכולוגית\n\nזקוקים לתמיכה? הנה מקורות עזר:"
+        },
+        "spec_finance": {
+            "ru": "💰 Финансовая помощь\n\nДотации и поддержка от государства:",
+            "en": "💰 Financial Help\n\nGovernment grants and support:",
+            "he": "💰 סיוע כלכלי\n\nמענקים ותמיכה מהמדינה:"
+        },
+        "spec_legal": {
+            "ru": "⚖️ Юридическая помощь\n\nБесплатные юридические консультации:",
+            "en": "⚖️ Legal Help\n\nFree legal consultations:",
+            "he": "⚖️ עזרה משפטית\n\nייעוץ משפטי חינם:"
+        }
+    }
+
+    links = {
+        "spec_psych": "https://www.kolzchut.org.il",
+        "spec_finance": "https://www.btl.gov.il",
+        "spec_legal": "https://www.kolzchut.org.il"
+    }
+
+    msg = content[key][lang]
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(InlineKeyboardButton("🔗 Перейти на сайт", url=links[key]))
+    keyboard.add(InlineKeyboardButton(translations["menu"][lang], callback_data="menu"))
+    bot.send_message(call.message.chat.id, msg, reply_markup=keyboard)
 
 bot.polling(none_stop=True)
