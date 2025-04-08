@@ -1,6 +1,5 @@
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-import json
 import os
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -12,38 +11,162 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or "ВАШ_GEMINI_API_KEY_ТУТ"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-FAQ_FILE = "user_faqs.json"
 user_languages = {}
-
-# Инициализация Gemini
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-pro")
-
-base_faqs = [
-    {"question": "Какие льготы положены раненым солдатам?", "answer": "Раненым солдатам положены медицинские, финансовые и социальные льготы."},
-    {"question": "Где получить помощь с реабилитацией?", "answer": "Обратитесь в ближайший реабилитационный центр или медицинское учреждение."},
-    {"question": "Как подать заявление на пособие?", "answer": "Вы можете подать заявление через портал государственных услуг или в МФЦ."},
-    {"question": "Какие документы нужны для получения льгот?", "answer": "Паспорт, медицинское заключение, удостоверение участника боевых действий."},
-    {"question": "Можно ли получить психологическую помощь?", "answer": "Да, вы можете обратиться к военному психологу или в центр поддержки ветеранов."},
-    {"question": "Как долго длится процесс восстановления?", "answer": "Это индивидуально, зависит от степени травмы и типа лечения."},
-    {"question": "Есть ли льготы для членов семьи?", "answer": "Да, для членов семьи также предусмотрены определённые социальные льготы."},
-    {"question": "Кто может помочь с юридическими вопросами?", "answer": "Юридическую помощь можно получить в государственных центрах или НКО."},
-    {"question": "Как получить компенсацию за потерю трудоспособности?", "answer": "Нужно пройти медицинскую комиссию и подать документы в ФСС."},
-    {"question": "Где найти сообщество таких же пострадавших?", "answer": "Существуют цифровые платформы поддержки и группы в соцсетях."}
-]
-
 user_questions = []
 faq_likes = {}
 
+# Настройка Gemini
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel("gemini-pro")
+
+translations = {
+    "choose_language": {"ru": "Выберите язык:", "en": "Choose a language:", "he": "בחר שפה:"},
+    "main_menu": {"ru": "Выберите опцию:", "en": "Choose an option:", "he": "בחר אפשרות:"},
+    "faq": {"ru": "❓ Часто задаваемые вопросы", "en": "❓ Frequently Asked Questions", "he": "❓ שאלות נפוצות"},
+    "ask": {"ru": "✍ Задать свой вопрос", "en": "✍ Ask your question", "he": "✍ שאל שאלה"},
+    "menu": {"ru": "🔙 В меню", "en": "🔙 Back to menu", "he": "🔙 חזרה לתפריט"},
+    "change_lang": {"ru": "🌐 Сменить язык", "en": "🌐 Change language", "he": "🌐 שנה שפה"},
+    "like_thanks": {"ru": "Спасибо за оценку!", "en": "Thanks for your feedback!", "he": "תודה על המשוב!"},
+    "prompt_question": {"ru": "Введите ваш вопрос:", "en": "Please type your question:", "he": "כתוב את שאלתך:"},
+    "error_ai": {"ru": "Произошла ошибка при получении ответа.", "en": "An error occurred while getting a response.", "he": "אירעה שגיאה בעת קבלת תשובה."},
+    "no_more_questions": {"ru": "Это был последний вопрос. Возвращаем в меню.", "en": "That was the last question. Returning to the menu.", "he": "זו הייתה השאלה האחרונה. חוזרים לתפריט."}
+}
+
+base_faqs = [
+    {
+        "question": {
+            "ru": "Какие льготы положены раненым солдатам?",
+            "en": "What benefits are available for wounded soldiers?",
+            "he": "אילו הטבות מגיעות לחיילים פצועים?"
+        },
+        "answer": {
+            "ru": "Раненым солдатам положены медицинские, финансовые и социальные льготы.",
+            "en": "Wounded soldiers are entitled to medical, financial, and social benefits.",
+            "he": "לחיילים פצועים מגיעות הטבות רפואיות, כלכליות וחברתיות."
+        }
+    },
+    {
+        "question": {
+            "ru": "Где получить помощь с реабилитацией?",
+            "en": "Where can I get rehabilitation help?",
+            "he": "היכן ניתן לקבל עזרה בשיקום?"
+        },
+        "answer": {
+            "ru": "Обратитесь в ближайший реабилитационный центр или медицинское учреждение.",
+            "en": "Contact the nearest rehabilitation center or medical facility.",
+            "he": "פנה למרכז השיקום הקרוב או למוסד רפואי."
+        }
+    },
+    {
+        "question": {
+            "ru": "Как подать заявление на пособие?",
+            "en": "How to apply for benefits?",
+            "he": "כיצד להגיש בקשה לקצבה?"
+        },
+        "answer": {
+            "ru": "Вы можете подать заявление через портал государственных услуг или в МФЦ.",
+            "en": "You can apply through the public services portal or a service center.",
+            "he": "ניתן להגיש בקשה דרך פורטל השירותים הציבוריים או במרכז שירות."
+        }
+    },
+    {
+        "question": {
+            "ru": "Какие документы нужны для получения льгот?",
+            "en": "What documents are needed to receive benefits?",
+            "he": "אילו מסמכים נדרשים לקבלת הטבות?"
+        },
+        "answer": {
+            "ru": "Паспорт, медицинское заключение, удостоверение участника боевых действий.",
+            "en": "Passport, medical report, and combatant ID are required.",
+            "he": "נדרש דרכון, חוות דעת רפואית ותעודת לוחם."
+        }
+    },
+    {
+        "question": {
+            "ru": "Можно ли получить психологическую помощь?",
+            "en": "Can I get psychological help?",
+            "he": "האם ניתן לקבל עזרה נפשית?"
+        },
+        "answer": {
+            "ru": "Да, вы можете обратиться к военному психологу или в центр поддержки ветеранов.",
+            "en": "Yes, you can contact a military psychologist or a veteran support center.",
+            "he": "כן, ניתן לפנות לפסיכולוג צבאי או למרכז תמיכה לוותיקים."
+        }
+    },
+    {
+        "question": {
+            "ru": "Как долго длится процесс восстановления?",
+            "en": "How long does the recovery process take?",
+            "he": "כמה זמן נמשך תהליך השיקום?"
+        },
+        "answer": {
+            "ru": "Это индивидуально, зависит от степени травмы и типа лечения.",
+            "en": "It depends on the injury and type of treatment. Each case is different.",
+            "he": "זה תלוי בפציעה ובסוג הטיפול. כל מקרה שונה."
+        }
+    },
+    {
+        "question": {
+            "ru": "Есть ли льготы для членов семьи?",
+            "en": "Are there benefits for family members?",
+            "he": "האם יש הטבות לבני משפחה?"
+        },
+        "answer": {
+            "ru": "Да, для членов семьи также предусмотрены определённые социальные льготы.",
+            "en": "Yes, there are also specific social benefits for family members.",
+            "he": "כן, יש גם הטבות חברתיות מסוימות לבני משפחה."
+        }
+    },
+    {
+        "question": {
+            "ru": "Кто может помочь с юридическими вопросами?",
+            "en": "Who can help with legal issues?",
+            "he": "מי יכול לעזור בנושאים משפטיים?"
+        },
+        "answer": {
+            "ru": "Юридическую помощь можно получить в государственных центрах или НКО.",
+            "en": "Legal aid is available at government centers or NGOs.",
+            "he": "ניתן לקבל סיוע משפטי במרכזים ממשלתיים או בעמותות."
+        }
+    },
+    {
+        "question": {
+            "ru": "Как получить компенсацию за потерю трудоспособности?",
+            "en": "How to get compensation for disability?",
+            "he": "כיצד ניתן לקבל פיצוי על אובדן כושר עבודה?"
+        },
+        "answer": {
+            "ru": "Нужно пройти медицинскую комиссию и подать документы в ФСС.",
+            "en": "You must pass a medical evaluation and submit documents to the social insurance.",
+            "he": "יש לעבור ועדה רפואית ולהגיש מסמכים לביטוח הלאומי."
+        }
+    },
+    {
+        "question": {
+            "ru": "Где найти сообщество таких же пострадавших?",
+            "en": "Where can I find a community of others affected?",
+            "he": "היכן ניתן למצוא קהילה של נפגעים נוספים?"
+        },
+        "answer": {
+            "ru": "Существуют цифровые платформы поддержки и группы в соцсетях.",
+            "en": "There are digital support platforms and social media groups.",
+            "he": "ישנן פלטפורמות תמיכה דיגיטליות וקבוצות ברשתות החברתיות."
+        }
+    }
+]
+
 @bot.message_handler(commands=['start'])
 def start(message):
-    lang_keyboard = InlineKeyboardMarkup()
-    lang_keyboard.add(
+    show_language_menu(message.chat.id)
+
+def show_language_menu(chat_id):
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(
         InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru"),
-        InlineKeyboardButton("🇮🇱 עברית", callback_data="lang_he"),
-        InlineKeyboardButton("🇺🇸 English", callback_data="lang_en")
+        InlineKeyboardButton("🇺🇸 English", callback_data="lang_en"),
+        InlineKeyboardButton("🇮🇱 עברית", callback_data="lang_he")
     )
-    bot.send_message(message.chat.id, "Выберите язык / בחר שפה / Choose language:", reply_markup=lang_keyboard)
+    bot.send_message(chat_id, "Choose language / Выберите язык / בחר שפה:", reply_markup=keyboard)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("lang_"))
 def set_language(call):
@@ -51,54 +174,61 @@ def set_language(call):
     user_languages[call.from_user.id] = lang
     show_main_menu(call.message.chat.id, lang)
 
-def show_main_menu(chat_id, lang, edit=False, message_id=None):
-    texts = {
-        "ru": "Выберите опцию:",
-        "he": "בחר אפשרות:",
-        "en": "Choose an option:"
-    }
+def show_main_menu(chat_id, lang):
+    text = translations["main_menu"][lang]
     keyboard = InlineKeyboardMarkup()
-    keyboard.add(InlineKeyboardButton("❓ Часто задаваемые вопросы", callback_data="faq"))
-    keyboard.add(InlineKeyboardButton("✍ Задать свой вопрос", callback_data="ask"))
-    if edit:
-        bot.edit_message_text(texts[lang], chat_id, message_id, reply_markup=keyboard)
-    else:
-        bot.send_message(chat_id, texts[lang], reply_markup=keyboard)
+    keyboard.add(
+        InlineKeyboardButton(translations["faq"][lang], callback_data="faq"),
+        InlineKeyboardButton(translations["ask"][lang], callback_data="ask"),
+        InlineKeyboardButton(translations["change_lang"][lang], callback_data="change_lang")
+    )
+    bot.send_message(chat_id, text, reply_markup=keyboard)
+
+@bot.callback_query_handler(func=lambda call: call.data == "change_lang")
+def change_lang(call):
+    show_language_menu(call.message.chat.id)
 
 @bot.callback_query_handler(func=lambda call: call.data == "faq")
 def show_faq(call):
-    send_faq_page(call.message.chat.id, 0, user_languages.get(call.from_user.id, "ru"))
+    lang = user_languages.get(call.from_user.id, "ru")
+    send_faq_page(call.message.chat.id, 0, lang)
 
 def send_faq_page(chat_id, page, lang):
     faqs = base_faqs + user_questions
-    if page >= len(faqs):
-        bot.send_message(chat_id, "Больше нет вопросов." if lang == "ru" else "No more questions.")
+    if page >= len(base_faqs):
+        bot.send_message(chat_id, translations["no_more_questions"][lang])
+        show_main_menu(chat_id, lang)
         return
     faq = faqs[page]
-    text = f"Q: {faq['question']}\nA: {faq['answer']}"
+    q = faq["question"].get(lang, faq["question"].get("ru", ""))
+    a = faq["answer"].get(lang, faq["answer"].get("ru", ""))
+    text = f"Q: {q}\nA: {a}"
+
     keyboard = InlineKeyboardMarkup()
-    keyboard.add(InlineKeyboardButton("👍 Мне помогло", callback_data=f"like_{page}"))
-    if page + 1 < len(faqs):
-        keyboard.add(InlineKeyboardButton("➡️ Далее", callback_data=f"faq_page:{page+1}"))
-    keyboard.add(InlineKeyboardButton("🔙 В меню", callback_data="menu"))
+    keyboard.add(InlineKeyboardButton("👍", callback_data=f"like_{page}"))
+    if page + 1 < len(base_faqs):
+        keyboard.add(InlineKeyboardButton("➡️", callback_data=f"faq_page:{page+1}"))
+    keyboard.add(InlineKeyboardButton(translations["menu"][lang], callback_data="menu"))
+
     bot.send_message(chat_id, text, reply_markup=keyboard)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("faq_page:"))
 def paginate_faq(call):
     page = int(call.data.split(":")[1])
-    send_faq_page(call.message.chat.id, page, user_languages.get(call.from_user.id, "ru"))
+    lang = user_languages.get(call.from_user.id, "ru")
+    send_faq_page(call.message.chat.id, page, lang)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("like_"))
 def like_faq(call):
     index = int(call.data.split("_")[1])
     faq_likes[index] = faq_likes.get(index, 0) + 1
-    bot.answer_callback_query(call.id, "Спасибо за оценку!")
+    lang = user_languages.get(call.from_user.id, "ru")
+    bot.answer_callback_query(call.id, translations["like_thanks"][lang])
 
 @bot.callback_query_handler(func=lambda call: call.data == "ask")
 def ask_question(call):
     lang = user_languages.get(call.from_user.id, "ru")
-    prompt = {"ru": "Введите ваш вопрос:", "he": "כתוב את שאלתך:", "en": "Please type your question:"}[lang]
-    msg = bot.send_message(call.message.chat.id, prompt)
+    msg = bot.send_message(call.message.chat.id, translations["prompt_question"][lang])
     bot.register_next_step_handler(msg, receive_question)
 
 def receive_question(msg):
@@ -106,20 +236,17 @@ def receive_question(msg):
     lang = user_languages.get(msg.from_user.id, "ru")
     try:
         response = model.generate_content(question)
-        ai_answer = response.text.strip()
-    except Exception as e:
-        ai_answer = {
-            "ru": "Произошла ошибка при получении ответа.",
-            "he": "אירעה שגיאה בעת קבלת תשובה.",
-            "en": "An error occurred while getting a response."
-        }[lang]
-    user_questions.append({"question": question, "answer": ai_answer})
-    bot.send_message(msg.chat.id, f"{ai_answer}")
+        answer = response.text.strip()
+    except Exception:
+        answer = translations["error_ai"][lang]
+
+    user_questions.append({"question": {lang: question}, "answer": {lang: answer}})
+    bot.send_message(msg.chat.id, answer)
     show_main_menu(msg.chat.id, lang)
 
 @bot.callback_query_handler(func=lambda call: call.data == "menu")
 def back_to_menu(call):
     lang = user_languages.get(call.from_user.id, "ru")
-    show_main_menu(call.message.chat.id, lang, edit=True, message_id=call.message.message_id)
+    show_main_menu(call.message.chat.id, lang)
 
 bot.polling(none_stop=True)
