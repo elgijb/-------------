@@ -2,137 +2,124 @@ import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 import json
 import os
+import google.generativeai as genai
 from dotenv import load_dotenv
 
 load_dotenv()
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = os.getenv("BOT_TOKEN") or "ВАШ_ТОКЕН_ТУТ"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or "ВАШ_GEMINI_API_KEY_ТУТ"
+
 bot = telebot.TeleBot(BOT_TOKEN)
 
 FAQ_FILE = "user_faqs.json"
-
 user_languages = {}
 
-base_faqs_ru = [
-    {"question": "Как оформить статус раненого?", "answer": "Необходимо обратиться в военкомат с медицинскими документами.", "likes": 0},
-    {"question": "Какие выплаты положены после ранения?", "answer": "Компенсации зависят от степени повреждения. Обратитесь в соцзащиту.", "likes": 0},
-    {"question": "Где пройти реабилитацию?", "answer": "Вам должны предложить центр реабилитации по месту жительства.", "likes": 0},
-    {"question": "Как получить психологическую помощь?", "answer": "Позвоните на горячую линию Минобороны или обратитесь в клинику.", "likes": 0},
-    {"question": "Как восстановить документы после ранения?", "answer": "Обратитесь в МФЦ с удостоверением личности и справкой.", "likes": 0},
-    {"question": "Положена ли инвалидность?", "answer": "Это определяется медкомиссией по итогам обследования.", "likes": 0},
-    {"question": "Что делать при потере трудоспособности?", "answer": "Можно оформить пособие по временной нетрудоспособности.", "likes": 0},
-    {"question": "Где найти юриста для консультации?", "answer": "Воспользуйтесь бесплатной юрпомощью в регионе.", "likes": 0},
-    {"question": "Как перевестись на другую службу после ранения?", "answer": "Обратитесь к командиру части или в кадровый отдел.", "likes": 0},
-    {"question": "Что делать, если не выплачивают компенсацию?", "answer": "Подайте жалобу в военную прокуратуру или в суд.", "likes": 0},
+# Инициализация Gemini
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel("gemini-pro")
+
+base_faqs = [
+    {"question": "Какие льготы положены раненым солдатам?", "answer": "Раненым солдатам положены медицинские, финансовые и социальные льготы."},
+    {"question": "Где получить помощь с реабилитацией?", "answer": "Обратитесь в ближайший реабилитационный центр или медицинское учреждение."},
+    {"question": "Как подать заявление на пособие?", "answer": "Вы можете подать заявление через портал государственных услуг или в МФЦ."},
+    {"question": "Какие документы нужны для получения льгот?", "answer": "Паспорт, медицинское заключение, удостоверение участника боевых действий."},
+    {"question": "Можно ли получить психологическую помощь?", "answer": "Да, вы можете обратиться к военному психологу или в центр поддержки ветеранов."},
+    {"question": "Как долго длится процесс восстановления?", "answer": "Это индивидуально, зависит от степени травмы и типа лечения."},
+    {"question": "Есть ли льготы для членов семьи?", "answer": "Да, для членов семьи также предусмотрены определённые социальные льготы."},
+    {"question": "Кто может помочь с юридическими вопросами?", "answer": "Юридическую помощь можно получить в государственных центрах или НКО."},
+    {"question": "Как получить компенсацию за потерю трудоспособности?", "answer": "Нужно пройти медицинскую комиссию и подать документы в ФСС."},
+    {"question": "Где найти сообщество таких же пострадавших?", "answer": "Существуют цифровые платформы поддержки и группы в соцсетях."}
 ]
 
-base_faqs_he = [
-    {"question": "איך מקבלים מעמד של פצוע קרב?", "answer": "צריך לפנות ללשכת הגיוס עם מסמכים רפואיים.", "likes": 0},
-    {"question": "אילו תשלומים מגיעים אחרי פציעה?", "answer": "פיצויים תלויים בדרגת הפציעה. יש לפנות לרווחה.", "likes": 0},
-    {"question": "איפה אפשר לעבור שיקום?", "answer": "צריך לקבל מרכז שיקום לפי מקום מגורים.", "likes": 0},
-    {"question": "איך לקבל עזרה פסיכולוגית?", "answer": "פנה לקו חם של משרד הביטחון או לקליניקה.", "likes": 0},
-    {"question": "איך לשחזר מסמכים אחרי פציעה?", "answer": "פנה למרכז שירות עם תעודה מזהה ואישור רפואי.", "likes": 0},
-    {"question": "האם מגיעה נכות?", "answer": "זה נקבע על ידי ועדה רפואית לאחר בדיקה.", "likes": 0},
-    {"question": "מה לעשות אם לא יכול לעבוד?", "answer": "ניתן להגיש בקשה לקצבת אי כושר זמנית.", "likes": 0},
-    {"question": "איפה למצוא ייעוץ משפטי?", "answer": "יש לפנות לסיוע משפטי חינם באזורך.", "likes": 0},
-    {"question": "איך לעבור תפקיד בצבא לאחר פציעה?", "answer": "פנה למפקד היחידה או למחלקת כוח אדם.", "likes": 0},
-    {"question": "מה לעשות אם לא משלמים פיצוי?", "answer": "הגש תלונה לפרקליטות הצבאית או לבית המשפט.", "likes": 0},
-]
-
-def load_user_faqs():
-    try:
-        with open(FAQ_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return []
-
-def save_user_faqs(faqs):
-    with open(FAQ_FILE, 'w', encoding='utf-8') as f:
-        json.dump(faqs, f, ensure_ascii=False, indent=2)
+user_questions = []
+faq_likes = {}
 
 @bot.message_handler(commands=['start'])
-def choose_language(msg):
-    keyboard = InlineKeyboardMarkup()
-    keyboard.add(InlineKeyboardButton("Русский", callback_data="lang:ru"))
-    keyboard.add(InlineKeyboardButton("עברית", callback_data="lang:he"))
-    bot.send_message(msg.chat.id, "Выберите язык / בחר שפה:", reply_markup=keyboard)
+def start(message):
+    lang_keyboard = InlineKeyboardMarkup()
+    lang_keyboard.add(
+        InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru"),
+        InlineKeyboardButton("🇮🇱 עברית", callback_data="lang_he"),
+        InlineKeyboardButton("🇺🇸 English", callback_data="lang_en")
+    )
+    bot.send_message(message.chat.id, "Выберите язык / בחר שפה / Choose language:", reply_markup=lang_keyboard)
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("lang:"))
+@bot.callback_query_handler(func=lambda call: call.data.startswith("lang_"))
 def set_language(call):
-    lang = call.data.split(":")[1]
+    lang = call.data.split("_")[1]
     user_languages[call.from_user.id] = lang
+    show_main_menu(call.message.chat.id, lang)
+
+def show_main_menu(chat_id, lang, edit=False, message_id=None):
+    texts = {
+        "ru": "Выберите опцию:",
+        "he": "בחר אפשרות:",
+        "en": "Choose an option:"
+    }
     keyboard = InlineKeyboardMarkup()
-    keyboard.add(InlineKeyboardButton("Часто задаваемые вопросы" if lang == "ru" else "שאלות נפוצות", callback_data="faq_page:0"))
-    keyboard.add(InlineKeyboardButton("Задать свой вопрос" if lang == "ru" else "שאל שאלה", callback_data="ask"))
-    welcome = "Добро пожаловать! Выберите действие:" if lang == "ru" else "ברוך הבא! בחר פעולה:"
-    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, text=welcome, reply_markup=keyboard)
+    keyboard.add(InlineKeyboardButton("❓ Часто задаваемые вопросы", callback_data="faq"))
+    keyboard.add(InlineKeyboardButton("✍ Задать свой вопрос", callback_data="ask"))
+    if edit:
+        bot.edit_message_text(texts[lang], chat_id, message_id, reply_markup=keyboard)
+    else:
+        bot.send_message(chat_id, texts[lang], reply_markup=keyboard)
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("faq_page"))
-def paginate_faq(call: CallbackQuery):
-    lang = user_languages.get(call.from_user.id, "ru")
-    page = int(call.data.split(":")[1])
-    user_faqs = load_user_faqs()
-    all_faqs = (base_faqs_ru if lang == "ru" else base_faqs_he) + user_faqs
+@bot.callback_query_handler(func=lambda call: call.data == "faq")
+def show_faq(call):
+    send_faq_page(call.message.chat.id, 0, user_languages.get(call.from_user.id, "ru"))
 
-    if page >= len(all_faqs): page = 0
-    faq = all_faqs[page]
-
+def send_faq_page(chat_id, page, lang):
+    faqs = base_faqs + user_questions
+    if page >= len(faqs):
+        bot.send_message(chat_id, "Больше нет вопросов." if lang == "ru" else "No more questions.")
+        return
+    faq = faqs[page]
+    text = f"Q: {faq['question']}\nA: {faq['answer']}"
     keyboard = InlineKeyboardMarkup()
-    if page > 0:
-        keyboard.add(InlineKeyboardButton("← Назад" if lang == "ru" else "← חזור", callback_data=f"faq_page:{page - 1}"))
-    if page < len(all_faqs) - 1:
-        keyboard.add(InlineKeyboardButton("Вперёд →" if lang == "ru" else "→ הבא", callback_data=f"faq_page:{page + 1}"))
-    keyboard.add(InlineKeyboardButton(("👍 Мне помогло" if lang == "ru" else "👍 זה עזר לי") + f" ({faq.get('likes', 0)})", callback_data=f"like:{page}"))
+    keyboard.add(InlineKeyboardButton("👍 Мне помогло", callback_data=f"like_{page}"))
+    if page + 1 < len(faqs):
+        keyboard.add(InlineKeyboardButton("➡️ Далее", callback_data=f"faq_page:{page+1}"))
+    keyboard.add(InlineKeyboardButton("🔙 В меню", callback_data="menu"))
+    bot.send_message(chat_id, text, reply_markup=keyboard)
 
-    bot.edit_message_text(chat_id=call.message.chat.id,
-                          message_id=call.message.message_id,
-                          text=f"Вопрос: {faq['question']}\nОтвет: {faq['answer']}" if lang == "ru" else f"שאלה: {faq['question']}\nתשובה: {faq['answer']}",
-                          reply_markup=keyboard)
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith("like:"))
-def like_faq(call: CallbackQuery):
+@bot.callback_query_handler(func=lambda call: call.data.startswith("faq_page:"))
+def paginate_faq(call):
     page = int(call.data.split(":")[1])
-    user_faqs = load_user_faqs()
+    send_faq_page(call.message.chat.id, page, user_languages.get(call.from_user.id, "ru"))
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("like_"))
+def like_faq(call):
+    index = int(call.data.split("_")[1])
+    faq_likes[index] = faq_likes.get(index, 0) + 1
+    bot.answer_callback_query(call.id, "Спасибо за оценку!")
+
+@bot.callback_query_handler(func=lambda call: call.data == "ask")
+def ask_question(call):
     lang = user_languages.get(call.from_user.id, "ru")
-
-    if page < 10:
-        (base_faqs_ru if lang == "ru" else base_faqs_he)[page]['likes'] += 1
-    else:
-        idx = page - 10
-        user_faqs[idx]['likes'] += 1
-        save_user_faqs(user_faqs)
-
-    paginate_faq(CallbackQuery(id=call.id, from_user=call.from_user, message=call.message, data=f"faq_page:{page}"))
-    bot.answer_callback_query(call.id, "Спасибо!" if lang == "ru" else "תודה!")
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith("like:"))
-def like_faq(call: CallbackQuery):
-    page = int(call.data.split(":")[1])
-    user_faqs = load_user_faqs()
-    lang = user_languages.get(call.from_user.id, "ru")
-
-    if page < 10:
-        (base_faqs_ru if lang == "ru" else base_faqs_he)[page]['likes'] += 1
-    else:
-        idx = page - 10
-        user_faqs[idx]['likes'] += 1
-        save_user_faqs(user_faqs)
-
-    call.data = f"faq_page:{page}"
-    paginate_faq(call)
-    bot.answer_callback_query(call.id, "Спасибо!" if lang == "ru" else "תודה!")
-
+    prompt = {"ru": "Введите ваш вопрос:", "he": "כתוב את שאלתך:", "en": "Please type your question:"}[lang]
+    msg = bot.send_message(call.message.chat.id, prompt)
+    bot.register_next_step_handler(msg, receive_question)
 
 def receive_question(msg):
     question = msg.text
-    sent = bot.send_message(msg.chat.id, "Введите ответ на вопрос (или '-' если не знаете):" if user_languages.get(msg.from_user.id, "ru") == "ru" else "כתוב תשובה או '-' אם אינך יודע:")
-    bot.register_next_step_handler(sent, lambda m: store_faq(m, question))
+    lang = user_languages.get(msg.from_user.id, "ru")
+    try:
+        response = model.generate_content(question)
+        ai_answer = response.text.strip()
+    except Exception as e:
+        ai_answer = {
+            "ru": "Произошла ошибка при получении ответа.",
+            "he": "אירעה שגיאה בעת קבלת תשובה.",
+            "en": "An error occurred while getting a response."
+        }[lang]
+    user_questions.append({"question": question, "answer": ai_answer})
+    bot.send_message(msg.chat.id, f"{ai_answer}")
+    show_main_menu(msg.chat.id, lang)
 
-def store_faq(msg, question):
-    answer = msg.text if msg.text != "-" else ""
-    user_faqs = load_user_faqs()
-    user_faqs.append({"question": question, "answer": answer, "likes": 0})
-    save_user_faqs(user_faqs)
-    bot.send_message(msg.chat.id, "Спасибо! Ваш вопрос добавлен." if user_languages.get(msg.from_user.id, "ru") == "ru" else "תודה! השאלה שלך נוספה.")
+@bot.callback_query_handler(func=lambda call: call.data == "menu")
+def back_to_menu(call):
+    lang = user_languages.get(call.from_user.id, "ru")
+    show_main_menu(call.message.chat.id, lang, edit=True, message_id=call.message.message_id)
 
 bot.polling(none_stop=True)
